@@ -1,3 +1,9 @@
+# HELLO DAVID! YOU NEED TO FIND A WAY TO MAKE EACH OF THE EVENT CODES UNIQUE!?
+# EVERY TAG IS NOW UNIQUE, BUT THERE CAN BE REPEAT CODES. IN SUCH AN EVENT,
+# YOU WILL OVERWRITE A RELEVANT TAG. MAYBE JUST HARD CODE THAT THANG IN THERE AND
+# CALL IT A DAY AND THEN MODIFY THE EXTRACT LEVEL, CODE, RESULT FUNCTION TO TAKE CARE
+# OF THAT ISSUE (IF LEN === X, THEN GET RID OF THE TRAILING DIGIT)
+# PRAY TO SOMEBODY'S GOD THAT NOBODY DOES THE SAME THING MORE THAN 9 TIMES 
 import mne, json, os, warnings
 import numpy as np
 import matplotlib.pyplot as plt
@@ -20,9 +26,17 @@ def event_dictionary(raw):
 # reverse dictionary (maps codes to tags)
 def rev_event_dictionary(game_dict):
     rev_game_dict = {}
-    for key in game_dict:
+    for key in game_dict:    
         rev_game_dict[str(game_dict[key])] = key
     return rev_game_dict
+
+# reverse dictionary (maps codes to tags)
+#def rev_event_dictionary_2(game_dict):
+#    rev_game_dict = {}
+#    for key, value in game_dict.items():
+#        for element in value:
+#            rev_game_dict[str(game_dict[key])] = key
+#    return rev_game_dict
 
 # filter/clean up our data (ripped from Felix's code)
 # need more info from Shannon about which frequencies we want to remove and which we want to keep
@@ -246,9 +260,7 @@ def extract_level_code_and_result(event):
        
     # extract the original code that the new code was created from (middle three numbers of the new code)
     og_code = event_code[-3] + event_code[-2] + event_code[-1]
-    #print('og_code_0: ' + og_code)
     og_code = str(int(og_code)) # perform int operation to remove leading zeroes
-    #print('og_code_1: ' + og_code)
         
     # remove the digits relating to the original event code
     event_code = event_code[:-3]
@@ -261,14 +273,15 @@ def extract_level_code_and_result(event):
     if result == '99':
         result = 'correct'
     else:
-        result = 'incorrect'
+        result = 'incorrect' # + str(result)
     return level, og_code, result
 
 # creates a dict for the new, updated tags
 def updated_dict(events, rev_dict):
     dict = {}
+    counter = 0
     for event in events:
-        event_timestamp = event[0]
+        event_timestamp = str(event[0])
         # find the level, og event code, and result of that trial
         level, og_code, result = extract_level_code_and_result(event)
         og_tag = rev_dict[str(og_code)]
@@ -276,15 +289,26 @@ def updated_dict(events, rev_dict):
         # see https://mne.tools/dev/auto_tutorials/raw/20_event_arrays.html
         # and find the "Mapping Event IDs to trial descriptors" portion for details
         # about what I am doing
-        key = level + '/' + og_tag + '/' + result
+        key = level + '/' + og_tag + '/' + result + '/' + event_timestamp
         value = event[2]
         
         # the word (the key) is defined to be the new, transformed code
         # So each unique combination of level, original code, and result
         # will have a unique code. And every code will correspond to a unique
         # tag consisting of level, original code, and result (A bijection!!!!!!)
+        #try:
+        #    dict[key].append(value)
+        #except:
+        #    dict[key] = [value]
+        
         dict[key] = value
-    return dict
+        if value == 1303318:
+            print('HERE I AM')
+            print(key)
+            save = key
+        counter += 1
+    print('counter: ' + str(counter))
+    return dict, save
 
 def sort_chronologically(array):
     i = 0
@@ -314,7 +338,6 @@ def epoch_dictionary(raw, subsetted_lists):
                 subkey = 'all'
             else:
                 subkey = 'level ' + str(j)
-            #print(subkey + ' ' + key + ' length: ' + str(len(sublist)))
             sublistt = np.asarray(sublist.copy())
             try:
                 epochs = mne.Epochs(raw= raw,events=sublistt, tmin= -0.5, tmax = 1, baseline=(None,0), picks= ['eeg','eog'], on_missing= 'ignore', preload = True)
@@ -324,29 +347,7 @@ def epoch_dictionary(raw, subsetted_lists):
             j += 1
         i += 1
     return epoch_dict
-        #print('\n\n START OF NEW SET OF EPOCHS \n\n')
-        #epochs = mne.Epochs(raw= raw,events=list, tmin= -0.5, tmax = 1, baseline=(None,0), picks= ['eeg','eog'], on_missing= 'ignore', preload = True)
-        #print('\n\n END OF NEW SET OF EPOCHS \n\n')
-        #epoch_dict[key] = {}
-        #epoch_dict[key]['all'] = epochs.copy()
-        
-        # set the list for levels to null
-        #list = []
-        #j = 0
-        # iterate over all of the levels 
-        
-        #for level in levels_list:
-        #    print(level[i])
-            # add the correct bit to the right entry in the dict
-        #    list = np.asarray(level[i].copy())
-        #    epochs = mne.Epochs(raw= raw,events=list, tmin= -0.5, tmax = 1, baseline=(None,0), picks= ['eeg','eog'], on_missing= 'ignore', preload = True)
-        #    epoch_dict[key]['level ' + str(j+1)] = epochs.copy()
-        #    j += 1
-        #i += 1
-               
-    
-    #return epoch_dict
-            
+
 # given the epoch dict and a list of the relevant keywords, this allows us to use the keywords to extract
 # which of the sublists we want. The return value will be a 2-tuple, with the first entry being the epochs
 # formed from the events that were a part of trials where the user was correct. The second entry will be 
@@ -393,12 +394,10 @@ def seperate_events(events, rev_dict):
         event_code = event[2]
         event_name = rev_dict[str(event_code)]
         if 'incorrect' in event_name:
-            #print('incorrect event name: ' + str(event_name))
             incorrect_events.append(event)
         else:
             correct_events.append(event)
-    #print('length of correct events: ' + str(len(correct_events)))
-    #print('length of incorrect events: ' + str(len(incorrect_events)))
+
     #-----------------------------------------------------------------------------
     # at this point the events are properly sorted into correct vs incorrect lists
     #-----------------------------------------------------------------------------
@@ -420,7 +419,6 @@ def seperate_events(events, rev_dict):
         # find which of these relevant tags the event is.
         i = 0
         for tag in tag_list:
-            #print('event_name: ' + event_name)
             if tag in event_name:
                 break
             i += 1
@@ -462,55 +460,7 @@ def seperate_events(events, rev_dict):
     for list in list_of_lists_inc:
         list = sort_chronologically(list).copy()
         incorrect_events.append(list)
-    #for list in correct_events:
-    #    print('length of correct events: ' + str(len(list)))
-    #for list in incorrect_events:
-    #    print('length of incorrect events: ' + str(len(list)))
-    # list of the level numbers
-    # we want to find the maximum level obtained
-    #levels_list = []
-    
-    # iterate over all of the correct fixation events and extract the maximum level attained
-    #max_level = 0
-    #for event in correct_events[3]:
-    #    level, og_code, result = extract_level_code_and_result(event)
-    #    if int(level) > max_level:
-    #        max_level = int(level)
-    
-    # create a list of empty lists with length of the maximum level
-    #for i in range(0, max_level):
-    #    levels_list.append([])
-    
-    # for each event in the fixation list, find its level and then append that event
-    # to the entry in the list that corresponds to that level (enty = level - 1)
-    #for event in correct_events[3]:
-    #    level, og_code, result = extract_level_code_and_result(event)
-    #    levels_list[level - 1].append(event)
-    
-    #correct_events[3] = []
-    #correct_events[3] = levels_list
-    #levels_list = []
-    
-        # iterate over all of the correct fixation events and extract the maximum level attained
-    #max_level = 0
-    #for event in incorrect_events[3]:
-    #    level, og_code, result = extract_level_code_and_result(event)
-    #    if int(level) > max_level:
-    #        max_level = int(level)
-    
-    # create a list of empty lists with length of the maximum level
-    #for i in range(0, max_level):
-    #    levels_list.append([])
-    
-    # for each event in the fixation list, find its level and then append that event
-    # to the entry in the list that corresponds to that level (enty = level - 1)
-    #for event in incorrect_events[3]:
-    #    level, og_code, result = extract_level_code_and_result(event)
-    #    levels_list[level - 1].append(event)
-    
-    #incorrect_events[3] = []
-    #incorrect_events[3] = levels_list
-    
+
     return [correct_events, incorrect_events]
 
 # creates a powerset of elements in the list
@@ -528,54 +478,20 @@ def powset():
 # GET RID OF EMPTY LEVELS?????
 def level_by_level_list(events_list):
     levels = []
-    for event in events_list:
-        #print('event code: ' + str(event[2]))
-        level, code, result = extract_level_code_and_result(event)
-        #print('level: ' + level + ' code : ' + code)
     for i in range (0,100):
         levels.append([])
     # put all of the tags in the list into levels[0].
     # As a result, level n will be found in levels[n]
     levels[0] = events_list.copy()
-    #print('length after we add the ALL list: ' + str(len(levels)))
     for event in events_list.copy():
         level, code, result = extract_level_code_and_result(event)
-        #print('level: ' + level)
-        # if a list exists for the level, then append the event to that list
-        # add a minus one?
         levels[int(level)].append(event)
-    #print ('END OF THIS FUNCTION')
             
     return levels.copy()
-            
-            
-    #level_list = []
-    #for i in range (1, 101):
-    #    level_list.append([[],[]])
-    #i = 0
-    # iterate over the correct list and the incorrect list
-    #for list in subsetted_lists:
-        # iterate over each event in the specific list that we are looking at (correct/incorrect)
-    #    for event in list:
-    #        # extract the level associated with the event
-    #        level, code, result = extract_level_code_and_result(event)
-    #        level = int(level) - 1
-    #        # for the given level and the given result (correct/incorrect), add it to the list
-    #        level_list[level][i].append(event)
-    #    i += 1
-    #    print('Level list lengths start here')
-    #i = 1
-    #for level in level_list:
-    #    print('len on level ' + str(i) + ' correct: ' + str(len(level[0])))
-    #    print('len on level' + str(i) + ' incorrect: ' + str(len(level[1])) + '\n\n') 
-    #print('Level list lengths end here')
-            
-    #return level_list
 
-def main():
+def subject_epoch_dict(file_path):
     # still need to create a way to iterate over all of the mff files
     # mne.set_log_level(False)
-    file_path = 'C:\\Users\\Administrator\\Documents\\eeg code\\Aptima Data complete 06.22.23\\Subject 051523\\051523_20230515_122244.mff'
     raw = mne.io.read_raw_egi(file_path, preload= True)
     dict = event_dictionary(raw)
     rev_dict = rev_event_dictionary(dict)
@@ -585,25 +501,22 @@ def main():
     events_raw = mne.find_events(raw= raw, stim_channel= 'STI 014', shortest_event=1)
     events = fix_events(raw, events_raw, rev_dict)
     
+    print('length of events' + str(len(events)))
     # create a new dict/ reverse dict for ease of access
-    dict = updated_dict(events, rev_dict)
+    dict,save = updated_dict(events, rev_dict)
+    print(str(dict[save]))
     rev_dict = rev_event_dictionary(dict)
     
     # 2 level nested dictionary of all of the epochs.
     # level 1 is correct epochs vs incorrect epochs.
     # level 2 is lists: 4 lists within each level 1 dictionary
     # The 4 lists are: 'FLSH', 'FXNM', 'MVE0', 'MVE1'
-    print('\n\n starting event categorization \n\n')
     event_categorization_list = seperate_events(events, rev_dict)
-    #for list in event_categorization_list:
-    #    for sublist in list:
-    #        print(str(len(sublist)))
-    
+
     # returns the powerset of ['FLSH', 'MVE0', 'MVE1', 'FX']
     powerset = powset()
     subj_epoch_dict = {}
     # subselect the lists that we are interested in for the subject (Subsets of 'FLSH', 'MVE0', 'MVE1', 'FX')
-    print('\n\n start subselecting lists and epoching \n\n')
     # iterate over each element in the powerset
     for element in powerset:
         # for each element set the key to empty and i = 0
@@ -631,38 +544,15 @@ def main():
         # for this subject, you would look under subj_epoch_dict['FLSH/FX']['correct']
         # MAKE SURE TO LIST THE TAGS IN ORDER OF ['FLSH', 'MVE0', 'MVE1', 'FX']
         subj_epoch_dict[key] = epochs
-    
-    counter = 1
-    for key, value in subj_epoch_dict.items():
-        for subvalue, subkey in value.items():
-            correct_list = subj_epoch_dict[key]['correct'][subvalue]
-            incorrect_list = subj_epoch_dict[key]['incorrect'][subvalue]
-            print('key: ' + str(key) + ' length of value: ' + str(len(value)) + ' length of correct: ' + str(len(correct_list)) + ' length of incorrect: ' + str(len(incorrect_list)))
-            counter += 1
-        break
-    print('total entries: ' + str((counter - 1) * 2))
-    
-    #print(str(len(subj_epoch_dict['FX']['correct'].events)))
-    #print(str(len(subj_epoch_dict['FLSH/MVE0']['incorrect'].events)))
-    #print(str(len(subj_epoch_dict['MVE0/MVE1/FX']['correct'].events)))
-    #print(str(len(subj_epoch_dict['FLSH/MVE0/MVE1/FX']['incorrect'].events)))
 
-    # at this point, i have a method for taking a user's data, extracting the relevant tags, tying those
-    # tags to their associated DIN, separating those tags into correct vs incorrect lists, subsetting those
-    # correct/incorrect lists into FLSH, MVE0, MVE1, and FX, and then creating all possible combinations 
-    # thereof (all combinations within the correct list and all possible combinations within the incorrect list),
-    # and thus creating all possible sets of epochs.
-    
-    # NEED: to create level by level epochs for the user (probably each user's epochs are in a dict with two keys,
-    # one being 'tags' and the other being 'levels' and every possible combination within the levels of the four tags)
-    
-    # ALSO NEED: generalize this to do this for n > 1 number of users.
+    return subj_epoch_dict
 
-    # create the level by level data for the user and all subsets of tags
+def main():
+    #file_path = 'C:\\Users\\Administrator\\Documents\\eeg code\\Aptima Data complete 06.22.23\\Subject 051523\\051523_20230515_122244.mff'
+    #subj_epoch_dict = subject_epoch_dict(file_path)
     
-    # for each combination of tags, there is a dict with two entries ('correct', 'incorrect') 
-    # combination is the string representing the combination of tags that we are looking at.
-    # value is the dictionary corresponding to either 'correct' or 'incorrect'
+    file_path = "C:\\Users\\Administrator\\Documents\\eeg code\\Aptima Data complete 06.22.23\\Subject 042823 _20230428_051627\\042823_20230428_051627.mff"
+    subj_epoch_dict = subject_epoch_dict(file_path)
     
 if __name__ == "__main__":
     main()
