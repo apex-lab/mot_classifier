@@ -137,6 +137,8 @@ def find_result(events_raw, rev_dict, index):
             if 'MS' in rev_dict[str(events_raw[index+j][2])]:
                 result = rev_dict[str(events_raw[index+j][2])] 
                 result = result[2:]
+                if result[0] == '0':
+                    result[0] = '9'
                 result_found = True
                 
             # if we find a correct trial
@@ -156,10 +158,26 @@ def find_result(events_raw, rev_dict, index):
 def find_start_index(events_raw, rev_dict):
     previous_events = []
     level_three_found = False
+    din_max_found = False
+    din_max_present = False
+    
+    for index, event in enumerate(events_raw):
+        event_code = event[2]
+        event_name = rev_dict[str(event_code)]
+        if event_name == '3.00':
+            din_max_present = True
+            break
+            
     for index, event in enumerate(events_raw):
         # store the netstation id and name of the event
         event_code = event[2]
         event_name = rev_dict[str(event_code)]
+           
+        if event_name == '3.00':
+            din_max_found = True
+        
+        if din_max_found == False and din_max_present == True:
+            continue
         # update the counter to find the start of the real trials
         j = 1
         
@@ -186,6 +204,7 @@ def find_start_index(events_raw, rev_dict):
 # transforms each din into a new tag reflecting the level, performance on the level, and the tag the din is associated with
 # also want to keep track of the OG place where we found each relevant tag as an element/entry in the new dictionary we create
 def fix_events(data, events_raw, rev_dict):
+    used_codes = []
     updated_events = []
     valid_count = 0
     
@@ -207,16 +226,17 @@ def fix_events(data, events_raw, rev_dict):
         
         # at this point, we are only analyzing tags that occur in the real trials and are not dins
         
-        # time of an event in samples * 1000 (roughly correlates to seconds)
+        # time of an event in samples / 1000 (roughly correlates to seconds)
         time = event[0] / 1000 
 
         # look in window of tag to see if there is a din
         window = data.copy().crop(tmin= time - 0.3, tmax= time + 0.3) 
-        
+        print('windowed the data')
         try: 
             # find events within the specified window
             window_events = mne.find_events(raw=window, stim_channel='STI 014', shortest_event= 1, initial_event=True)
         except:
+            print('we continued when trying tofind events in the window')
             continue
         #din_found = False # variable to see if we have found a din within the window
         
@@ -239,7 +259,10 @@ def fix_events(data, events_raw, rev_dict):
                     # result = 99 implies correct, anything else indicates how many correct out of how many total
                     # initial_code is the original tag that we started with
                     # level is the level that the user is on
-                    new_code = int(str(result) + str(event_code) + str(level))  # need to come up with interesting code for these tags
+                    new_code = int(str(result) + str(event_code) + str(level) + '00')  # need to come up with interesting code for these tags
+                    while new_code in used_codes:
+                        new_code += 1
+                    used_codes.append(new_code)
                     updated_events.append(np.array([din_time, 0, new_code]))
     print("valid tags: " + str(valid_count))
     print("length of new event list: " + str(len(updated_events)))
@@ -249,7 +272,8 @@ def fix_events(data, events_raw, rev_dict):
 # given one of the new tags, this function extracts the level, the original event code, and the result of that trial
 def extract_level_code_and_result(event):
     event_code = str(event[2])
-        
+    
+    event_code = event_code[:-2]    
     # level that the user was on (last two numbers of the new code)
     if event_code[-2] == '0': # if the level was padded with a leading zero then do not include it
         level = event_code[-1]
@@ -268,7 +292,9 @@ def extract_level_code_and_result(event):
     # the remaining values in the event code are the digits (as strings) representing the result
     # (99 = Correct), (else = incorrect)
     if len(event_code) != 2:
-        print('remaining event code does not equal two')
+        print('length: ' + str(len(event_code)) + ' event code: ' +  str(event[2]))
+        print('above event code does not equal two')
+        event_code = '0' + event_code
     result = event_code
     if result == '99':
         result = 'correct'
@@ -291,7 +317,7 @@ def updated_dict(events, rev_dict):
         # about what I am doing
         key = level + '/' + og_tag + '/' + result + '/' + event_timestamp
         value = event[2]
-        
+        dict[key] = value
         # the word (the key) is defined to be the new, transformed code
         # So each unique combination of level, original code, and result
         # will have a unique code. And every code will correspond to a unique
@@ -301,14 +327,14 @@ def updated_dict(events, rev_dict):
         #except:
         #    dict[key] = [value]
         
-        dict[key] = value
-        if value == 1303318:
-            print('HERE I AM')
-            print(key)
-            save = key
-        counter += 1
-    print('counter: ' + str(counter))
-    return dict, save
+        #dict[key] = value
+        #if value == 1303318:
+        #    print('HERE I AM')
+        #    print(key)
+        #    save = key
+        #counter += 1
+    #print('counter: ' + str(counter))
+    return dict
 
 def sort_chronologically(array):
     i = 0
@@ -340,7 +366,7 @@ def epoch_dictionary(raw, subsetted_lists):
                 subkey = 'level ' + str(j)
             sublistt = np.asarray(sublist.copy())
             try:
-                epochs = mne.Epochs(raw= raw,events=sublistt, tmin= -0.5, tmax = 1, baseline=(None,0), picks= ['eeg','eog'], on_missing= 'ignore', preload = True)
+                epochs = mne.Epochs(raw= raw,events=sublistt, tmin= -0.5, tmax = 1, baseline=(None,0), picks= ['eeg','eog'], on_missing= 'ignore')
                 epoch_dict[key][subkey] = epochs
             except:
                 epoch_dict[key][subkey] = None
@@ -491,28 +517,38 @@ def level_by_level_list(events_list):
 
 def subject_epoch_dict(file_path):
     # still need to create a way to iterate over all of the mff files
-    # mne.set_log_level(False)
-    raw = mne.io.read_raw_egi(file_path, preload= True)
+    mne.set_log_level(False)
+    print('\n\n' + str(file_path))
+    raw = mne.io.read_raw_egi(file_path)
+    print('loaded the raw')
     dict = event_dictionary(raw)
     rev_dict = rev_event_dictionary(dict)
     
     # extract the total list of events and then create a new events list
     # with the tags/codes of interest/updated codes
     events_raw = mne.find_events(raw= raw, stim_channel= 'STI 014', shortest_event=1)
-    events = fix_events(raw, events_raw, rev_dict)
-    
-    print('length of events' + str(len(events)))
+    print('found the events')
+   # for event in events_raw:
+    #    print(event)
+    try: 
+        #raw = raw.crop(tmin = 200)
+        events = fix_events(raw, events_raw, rev_dict)
+    except:
+        raw = raw.crop(tmin = 200)
+        events = fix_events(raw, events_raw, rev_dict)
+    print('fixed the events')
+    #print('length of events' + str(len(events)))
     # create a new dict/ reverse dict for ease of access
-    dict,save = updated_dict(events, rev_dict)
-    print(str(dict[save]))
+    dict = updated_dict(events, rev_dict)
+    #print(str(dict[save]))
     rev_dict = rev_event_dictionary(dict)
-    
+    print('updated the dictionaries')
     # 2 level nested dictionary of all of the epochs.
     # level 1 is correct epochs vs incorrect epochs.
     # level 2 is lists: 4 lists within each level 1 dictionary
     # The 4 lists are: 'FLSH', 'FXNM', 'MVE0', 'MVE1'
     event_categorization_list = seperate_events(events, rev_dict)
-
+    print('categorized the events')
     # returns the powerset of ['FLSH', 'MVE0', 'MVE1', 'FX']
     powerset = powset()
     subj_epoch_dict = {}
@@ -538,21 +574,37 @@ def subject_epoch_dict(file_path):
         
         # epochs will be a dictionary with two keys: correct and incorrect for the specified tags
         epochs = epoch_dictionary(raw, subsetted_lists)
-        
         # each key in our subject specific dictionary will be the element of the powerset that our
         # epochs are created from. So to index into the epochs for correct trials for 'FX' and 'FLSH'
         # for this subject, you would look under subj_epoch_dict['FLSH/FX']['correct']
         # MAKE SURE TO LIST THE TAGS IN ORDER OF ['FLSH', 'MVE0', 'MVE1', 'FX']
         subj_epoch_dict[key] = epochs
-
+    print('epoched the data and completed this subject \n\n\n')
     return subj_epoch_dict
 
 def main():
-    #file_path = 'C:\\Users\\Administrator\\Documents\\eeg code\\Aptima Data complete 06.22.23\\Subject 051523\\051523_20230515_122244.mff'
-    #subj_epoch_dict = subject_epoch_dict(file_path)
+    SCRATCH = os.getenv('SCRATCH')
+    data_path = os.path.join(SCRATCH, 'data')
+    overall_dict = {}
+    successes = 0
+    failures = 0
+    i = 1
+    for subject_folder in os.listdir(data_path):
+        path = os.path.join(data_path, subject_folder)
+        for thing in os.listdir(path):
+            if '.mff' in thing:
+                try:
+                    file_path = os.path.join(path, thing)
+                    overall_dict[str(i)] = subject_epoch_dict(file_path)
+                    i += 1
+                    successes += 1
+                except:
+                    failures += 1
+                    continue
+    print('successes: ' + str(successes))
+    print('failures: ' + str(failures))
+
     
-    file_path = "C:\\Users\\Administrator\\Documents\\eeg code\\Aptima Data complete 06.22.23\\Subject 042823 _20230428_051627\\042823_20230428_051627.mff"
-    subj_epoch_dict = subject_epoch_dict(file_path)
     
 if __name__ == "__main__":
     main()
