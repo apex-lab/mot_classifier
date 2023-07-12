@@ -96,9 +96,11 @@ def find_level(events_raw, rev_dict, index):
     # find the level in which the tag occured
     while level_found == False:
         try:
-            
+            if 'FIX' in rev_dict[str(events_raw[index-j][2])]:
+                level = '99'
+                level_found = True
             # if it is a fixation tag then extract the level
-            if 'FX' in rev_dict[str(events_raw[index-j][2])]: 
+            elif 'FX' in rev_dict[str(events_raw[index-j][2])]: 
                 level = rev_dict[str(events_raw[index-j][2])]
                 
                 # remove F and X from the tag, leaving us with just the numbers as a string
@@ -138,13 +140,18 @@ def find_result(events_raw, rev_dict, index):
                 result = rev_dict[str(events_raw[index+j][2])] 
                 result = result[2:]
                 if result[0] == '0':
-                    result[0] = '9'
+                    result[0] = '8'
                 result_found = True
-                
+            elif 'MIS' in rev_dict[str(events_raw[index+j][2])]:
+                result = '88'
+                result_found = True
             # if we find a correct trial
             elif 'CRCT' == rev_dict[str(events_raw[index+j][2])]: 
                 result = str(99) # 99 will indicate a correct trial
                 result_found = True
+            elif 'COR' in rev_dict[str(events_raw[index+j][2])]:
+                result = str(99)
+                result_found = True            
             j += 1
         except:
             result_found = True 
@@ -230,15 +237,14 @@ def fix_events(data, events_raw, rev_dict):
         time = event[0] / 1000 
 
         # look in window of tag to see if there is a din
-        window = data.copy().crop(tmin= time - 0.3, tmax= time + 0.3) 
-        print('windowed the data')
+        window = data.copy().crop(tmin= time - 0.3, tmax= time + 0.3)
         try: 
             # find events within the specified window
             window_events = mne.find_events(raw=window, stim_channel='STI 014', shortest_event= 1, initial_event=True)
         except:
             print('we continued when trying tofind events in the window')
             continue
-        #din_found = False # variable to see if we have found a din within the window
+        din_found = False # variable to see if we have found a din within the window
         
         # iterate over all of the events in the window
         for window_event in window_events:
@@ -246,14 +252,18 @@ def fix_events(data, events_raw, rev_dict):
             window_event_name = rev_dict[str(window_event[2])]
             
             # if we find a din in the window and it is the first din we find in that window
-            if window_event_name == 'DIN1': 
+            if window_event_name == 'DIN1':
+                din_found = True 
                 # time of the din in samples
                 din_time = window_event[0]
 
                 # find the level and the result associated with the din
                 level = find_level(events_raw, rev_dict, index)
                 result = find_result(events_raw, rev_dict, index)
-                        
+                if level == -1:
+                    print('level error. Tag: ' + event_name)
+                if result == -1:
+                    print('result error. Tag: ' + event_name)        
                 # if we have no problems then construct the new tag
                 if level != -1 and result != -1:
                     # result = 99 implies correct, anything else indicates how many correct out of how many total
@@ -264,6 +274,8 @@ def fix_events(data, events_raw, rev_dict):
                         new_code += 1
                     used_codes.append(new_code)
                     updated_events.append(np.array([din_time, 0, new_code]))
+        if din_found == False:
+           print('no dins in the window. Tag: ' + event_name)
     print("valid tags: " + str(valid_count))
     print("length of new event list: " + str(len(updated_events)))
                     
@@ -530,12 +542,12 @@ def subject_epoch_dict(file_path):
     print('found the events')
    # for event in events_raw:
     #    print(event)
-    try: 
+    #try: 
         #raw = raw.crop(tmin = 200)
-        events = fix_events(raw, events_raw, rev_dict)
-    except:
-        raw = raw.crop(tmin = 200)
-        events = fix_events(raw, events_raw, rev_dict)
+    events = fix_events(raw, events_raw, rev_dict)
+    #
+    #    raw = raw.crop(tmin = 200)
+    #    events = fix_events(raw, events_raw, rev_dict)
     print('fixed the events')
     #print('length of events' + str(len(events)))
     # create a new dict/ reverse dict for ease of access
