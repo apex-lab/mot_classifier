@@ -607,7 +607,7 @@ def main():
             if '.mff' in thing:
                 try:
                     file_path = os.path.join(path, thing)
-                    overall_dict[str(i)] = subject_epoch_dict(file_path)
+                    overall_dict['subject ' + str(i)] = subject_epoch_dict(file_path)
                     i += 1
                     successes += 1
                 except:
