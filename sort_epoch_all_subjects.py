@@ -1,9 +1,3 @@
-# HELLO DAVID! YOU NEED TO FIND A WAY TO MAKE EACH OF THE EVENT CODES UNIQUE!?
-# EVERY TAG IS NOW UNIQUE, BUT THERE CAN BE REPEAT CODES. IN SUCH AN EVENT,
-# YOU WILL OVERWRITE A RELEVANT TAG. MAYBE JUST HARD CODE THAT THANG IN THERE AND
-# CALL IT A DAY AND THEN MODIFY THE EXTRACT LEVEL, CODE, RESULT FUNCTION TO TAKE CARE
-# OF THAT ISSUE (IF LEN === X, THEN GET RID OF THE TRAILING DIGIT)
-# PRAY TO SOMEBODY'S GOD THAT NOBODY DOES THE SAME THING MORE THAN 9 TIMES 
 import mne, json, os, warnings
 import numpy as np
 import matplotlib.pyplot as plt
@@ -301,7 +295,8 @@ def sort_chronologically(array):
         new_events.append(event[1])
     return new_events.copy()
 
-# creates an evoked data structure from 
+# creates an evoked data structure from ??
+# last big step!!
 def average(epochs):
     channels = list(range(15,16))
     #Now that we have our epochs we use the "pick" method to specify which
@@ -346,7 +341,8 @@ def separate_events(events, rev_dict):
     incorrect_events = [incorrect_flash_list, incorrect_move_start_list] 
     correct_events = [correct_flash_list, correct_move_start_list]     
     return correct_events, incorrect_events
-    
+
+# epochs the events by result (correct vs incorrect) and tag (FLSH vs MVE0)
 def epoch_events(raw, correct_events, incorrect_events):
     epoch_dict = {}
     
@@ -375,6 +371,7 @@ def epoch_events(raw, correct_events, incorrect_events):
     
     return epoch_dict
 
+# creates a dictionary of epochs for a given subject (soon to be evokeds)
 def subject_dict(file_path):
     # print the name of the subject file 
     mne.set_log_level(False)
@@ -417,6 +414,7 @@ def subject_dict(file_path):
     print('evoked the events')
     return epoch_dict
 
+# iterates over subjects (just one at the moment)
 def main():
     mff_path = 'C:\\Users\\Administrator\\Documents\\eeg code\\Aptima Data complete 06.22.23\\Subject 051523\\051523_20230515_122244.mff'
     epoch_dict = subject_dict(mff_path)
