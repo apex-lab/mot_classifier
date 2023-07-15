@@ -34,32 +34,6 @@ def filter(raw):
     filtered_raw = raw.filter(l_freq=0.1, h_freq=50)
     return filtered_raw
 
-# last big step here!
-def average(data, events, event_dict):
-    avg_dict = {}
-        
-    # Define the epoch parameters (each epoch is 1.5 seconds)
-    minimum = -0.5  # start of each epoch (seconds)
-    maximum = 1  # end of each epoch (seconds)
-
-    # Compute Epochs
-    epochs_sep = []
-    epochs_sep_avg = []
-    channel_names = []
-
-    # Given a bit of data we extract (min - max) length epochs of that data.
-    # do we want to use projection vectors? How about baseline period? how about preload?
-    epochs_grouped = mne.Epochs(raw= data, event_id= event_dict, tmin= minimum, tmax = maximum, baseline=(None,0), picks = ['eeg','eog'], on_missing= 'ignore')
-
-
-    #NEW Now that we have our epochs we use the "pick" method to specify which
-    # channel (or subset of channels accd to the documentation) that we want to examine
-    # Finally we set "avg" to the average over that channel/subset of channels and return this value
-    #signal = epochs_grouped.pick(channel)
-    #avg = signal.average()
-
-    #return avg
-
 # returns true if event name is either 'FLSH' or 'MVE0'
 def valid_tag(event_name):
     if event_name == 'FLSH' or event_name == 'MVE0':
